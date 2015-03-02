@@ -92,12 +92,12 @@ var structTagObjectKeyTests = []struct {
 
 func TestStructTagObjectKey(t *testing.T) {
 	for _, tt := range structTagObjectKeyTests {
-		b, err := Marshal(tt.raw)
+		b, err := Marshal(tt.raw, "json")
 		if err != nil {
 			t.Fatalf("Marshal(%#q) failed: %v", tt.raw, err)
 		}
 		var f interface{}
-		err = Unmarshal(b, &f)
+		err = Unmarshal(b, &f, "json")
 		if err != nil {
 			t.Fatalf("Unmarshal(%#q) failed: %v", b, err)
 		}

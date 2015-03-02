@@ -64,11 +64,11 @@ import (
 // Instead, they are replaced by the Unicode replacement
 // character U+FFFD.
 //
-func Unmarshal(data []byte, v interface{}) error {
+func Unmarshal(data []byte, v interface{}, tag string) error {
 	// Check for well-formedness.
 	// Avoids filling out half a data structure
 	// before discovering a JSON syntax error.
-	var d decodeState
+	d := decodeState{tag: tag}
 	err := checkValid(data, &d.scan)
 	if err != nil {
 		return err
@@ -168,6 +168,7 @@ func (n Number) Int64() (int64, error) {
 
 // decodeState represents the state while decoding a JSON value.
 type decodeState struct {
+	tag        string //The tag name
 	data       []byte
 	off        int // read offset in data
 	scan       scanner
@@ -557,7 +558,7 @@ func (d *decodeState) object(v reflect.Value) {
 			subv = mapElem
 		} else {
 			var f *field
-			fields := cachedTypeFields(v.Type())
+			fields := cachedTypeFields(v.Type(), d.tag)
 			for i := range fields {
 				ff := &fields[i]
 				if bytes.Equal(ff.nameBytes, key) {

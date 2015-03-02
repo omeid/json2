@@ -57,7 +57,7 @@ func TestOmitEmpty(t *testing.T) {
 	o.Mr = map[string]interface{}{}
 	o.Mo = map[string]interface{}{}
 
-	got, err := MarshalIndent(&o, "", " ")
+	got, err := MarshalIndent(&o, "json", "", " ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestStringTag(t *testing.T) {
 	s.BoolStr = true
 	s.IntStr = 42
 	s.StrStr = "xzbit"
-	got, err := MarshalIndent(&s, "", " ")
+	got, err := MarshalIndent(&s, "json", "", " ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestStringTag(t *testing.T) {
 
 	// Verify that it round-trips.
 	var s2 StringTag
-	err = NewDecoder(bytes.NewReader(got)).Decode(&s2)
+	err = NewDecoder(bytes.NewReader(got), "json").Decode(&s2)
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
@@ -109,7 +109,7 @@ type renamedRenamedByteSlice []renamedByte
 
 func TestEncodeRenamedByteSlice(t *testing.T) {
 	s := renamedByteSlice("abc")
-	result, err := Marshal(s)
+	result, err := Marshal(s,"json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestEncodeRenamedByteSlice(t *testing.T) {
 		t.Errorf(" got %s want %s", result, expect)
 	}
 	r := renamedRenamedByteSlice("abc")
-	result, err = Marshal(r)
+	result, err = Marshal(r,"json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ var unsupportedValues = []interface{}{
 
 func TestUnsupportedValues(t *testing.T) {
 	for _, v := range unsupportedValues {
-		if _, err := Marshal(v); err != nil {
+		if _, err := Marshal(v,"json"); err != nil {
 			if _, ok := err.(*UnsupportedValueError); !ok {
 				t.Errorf("for %v, got %T want UnsupportedValueError", v, err)
 			}
@@ -204,7 +204,7 @@ func TestRefValMarshal(t *testing.T) {
 		V3: new(ValText),
 	}
 	const want = `{"R0":"ref","R1":"ref","R2":"\"ref\"","R3":"\"ref\"","V0":"val","V1":"val","V2":"\"val\"","V3":"\"val\""}`
-	b, err := Marshal(&s)
+	b, err := Marshal(&s,"json")
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
@@ -230,7 +230,7 @@ func (CText) MarshalText() ([]byte, error) {
 func TestMarshalerEscaping(t *testing.T) {
 	var c C
 	want := `"\u003c\u0026\u003e"`
-	b, err := Marshal(c)
+	b, err := Marshal(c,"json")
 	if err != nil {
 		t.Fatalf("Marshal(c): %v", err)
 	}
@@ -240,7 +240,7 @@ func TestMarshalerEscaping(t *testing.T) {
 
 	var ct CText
 	want = `"\"\u003c\u0026\u003e\""`
-	b, err = Marshal(ct)
+	b, err = Marshal(ct,"json")
 	if err != nil {
 		t.Fatalf("Marshal(ct): %v", err)
 	}
@@ -260,7 +260,7 @@ func TestAnonymousNonstruct(t *testing.T) {
 	a := MyStruct{i}
 	const want = `{"IntType":11}`
 
-	b, err := Marshal(a)
+	b, err := Marshal(a,"json")
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestEmbeddedBug(t *testing.T) {
 		BugA{"A"},
 		"B",
 	}
-	b, err := Marshal(v)
+	b, err := Marshal(v,"json")
 	if err != nil {
 		t.Fatal("Marshal:", err)
 	}
@@ -308,7 +308,7 @@ func TestEmbeddedBug(t *testing.T) {
 	x := BugX{
 		A: 23,
 	}
-	b, err = Marshal(x)
+	b, err = Marshal(x,"json")
 	if err != nil {
 		t.Fatal("Marshal:", err)
 	}
@@ -335,7 +335,7 @@ func TestTaggedFieldDominates(t *testing.T) {
 		BugA{"BugA"},
 		BugD{"BugD"},
 	}
-	b, err := Marshal(v)
+	b, err := Marshal(v,"json")
 	if err != nil {
 		t.Fatal("Marshal:", err)
 	}
@@ -362,7 +362,7 @@ func TestDuplicatedFieldDisappears(t *testing.T) {
 			BugD{"nested BugD"},
 		},
 	}
-	b, err := Marshal(v)
+	b, err := Marshal(v,"json")
 	if err != nil {
 		t.Fatal("Marshal:", err)
 	}
@@ -425,7 +425,7 @@ func TestIssue6458(t *testing.T) {
 	}
 	x := Foo{RawMessage(`"foo"`)}
 
-	b, err := Marshal(&x)
+	b, err := Marshal(&x,"json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func TestIssue6458(t *testing.T) {
 		t.Errorf("Marshal(&x) = %#q; want %#q", b, want)
 	}
 
-	b, err = Marshal(x)
+	b, err = Marshal(x,"json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,7 +459,7 @@ func TestEncodePointerString(t *testing.T) {
 		N *int64 `json:"n,string"`
 	}
 	var n int64 = 42
-	b, err := Marshal(stringPointer{N: &n})
+	b, err := Marshal(stringPointer{N: &n},"json")
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestEncodePointerString(t *testing.T) {
 		t.Errorf("Marshal = %s, want %s", got, want)
 	}
 	var back stringPointer
-	err = Unmarshal(b, &back)
+	err = Unmarshal(b, &back,"json")
 	if err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -519,7 +519,7 @@ var encodeStringTests = []struct {
 
 func TestEncodeString(t *testing.T) {
 	for _, tt := range encodeStringTests {
-		b, err := Marshal(tt.in)
+		b, err := Marshal(tt.in,"json")
 		if err != nil {
 			t.Errorf("Marshal(%q): %v", tt.in, err)
 			continue

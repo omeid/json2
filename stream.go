@@ -23,8 +23,8 @@ type Decoder struct {
 //
 // The decoder introduces its own buffering and may
 // read data from r beyond the JSON values requested.
-func NewDecoder(r io.Reader) *Decoder {
-	return &Decoder{r: r}
+func NewDecoder(r io.Reader, tag string) *Decoder {
+  return &Decoder{r: r, d: decodeState{tag: tag}}
 }
 
 // UseNumber causes the Decoder to unmarshal a number into an interface{} as a

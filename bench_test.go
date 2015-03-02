@@ -53,11 +53,11 @@ func codeInit() {
 
 	codeJSON = data
 
-	if err := Unmarshal(codeJSON, &codeStruct); err != nil {
+	if err := Unmarshal(codeJSON, &codeStruct,"json"); err != nil {
 		panic("unmarshal code.json: " + err.Error())
 	}
 
-	if data, err = Marshal(&codeStruct); err != nil {
+	if data, err = Marshal(&codeStruct,"json"); err != nil {
 		panic("marshal code.json: " + err.Error())
 	}
 
@@ -97,7 +97,7 @@ func BenchmarkCodeMarshal(b *testing.B) {
 		b.StartTimer()
 	}
 	for i := 0; i < b.N; i++ {
-		if _, err := Marshal(&codeStruct); err != nil {
+		if _, err := Marshal(&codeStruct,"json"); err != nil {
 			b.Fatal("Marshal:", err)
 		}
 	}
@@ -111,7 +111,7 @@ func BenchmarkCodeDecoder(b *testing.B) {
 		b.StartTimer()
 	}
 	var buf bytes.Buffer
-	dec := NewDecoder(&buf)
+	dec := NewDecoder(&buf, "json")
 	var r codeResponse
 	for i := 0; i < b.N; i++ {
 		buf.Write(codeJSON)
@@ -134,7 +134,7 @@ func BenchmarkCodeUnmarshal(b *testing.B) {
 	}
 	for i := 0; i < b.N; i++ {
 		var r codeResponse
-		if err := Unmarshal(codeJSON, &r); err != nil {
+		if err := Unmarshal(codeJSON, &r,"json"); err != nil {
 			b.Fatal("Unmmarshal:", err)
 		}
 	}
@@ -149,7 +149,7 @@ func BenchmarkCodeUnmarshalReuse(b *testing.B) {
 	}
 	var r codeResponse
 	for i := 0; i < b.N; i++ {
-		if err := Unmarshal(codeJSON, &r); err != nil {
+		if err := Unmarshal(codeJSON, &r,"json"); err != nil {
 			b.Fatal("Unmmarshal:", err)
 		}
 	}
@@ -160,7 +160,7 @@ func BenchmarkUnmarshalString(b *testing.B) {
 	var s string
 
 	for i := 0; i < b.N; i++ {
-		if err := Unmarshal(data, &s); err != nil {
+		if err := Unmarshal(data, &s,"json"); err != nil {
 			b.Fatal("Unmarshal:", err)
 		}
 	}
@@ -171,7 +171,7 @@ func BenchmarkUnmarshalFloat64(b *testing.B) {
 	data := []byte(`3.14`)
 
 	for i := 0; i < b.N; i++ {
-		if err := Unmarshal(data, &f); err != nil {
+		if err := Unmarshal(data, &f,"json"); err != nil {
 			b.Fatal("Unmarshal:", err)
 		}
 	}
@@ -182,7 +182,7 @@ func BenchmarkUnmarshalInt64(b *testing.B) {
 	data := []byte(`3`)
 
 	for i := 0; i < b.N; i++ {
-		if err := Unmarshal(data, &x); err != nil {
+		if err := Unmarshal(data, &x,"json"); err != nil {
 			b.Fatal("Unmarshal:", err)
 		}
 	}

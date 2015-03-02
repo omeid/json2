@@ -130,8 +130,8 @@ import (
 // handle them.  Passing cyclic structures to Marshal will result in
 // an infinite recursion.
 //
-func Marshal(v interface{}) ([]byte, error) {
-	e := &encodeState{}
+func Marshal(v interface{}, tag string) ([]byte, error) {
+  e := &encodeState{tag: tag}
 	err := e.marshal(v)
 	if err != nil {
 		return nil, err
@@ -140,8 +140,8 @@ func Marshal(v interface{}) ([]byte, error) {
 }
 
 // MarshalIndent is like Marshal but applies Indent to format the output.
-func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
-	b, err := Marshal(v)
+func MarshalIndent(v interface{}, tag, prefix, indent string) ([]byte, error) {
+	b, err := Marshal(v, tag)
 	if err != nil {
 		return nil, err
 	}
@@ -240,6 +240,7 @@ var hex = "0123456789abcdef"
 
 // An encodeState encodes JSON into a bytes.Buffer.
 type encodeState struct {
+  tag string
 	bytes.Buffer // accumulated output
 	scratch      [64]byte
 }
@@ -296,7 +297,7 @@ func isEmptyValue(v reflect.Value) bool {
 }
 
 func (e *encodeState) reflectValue(v reflect.Value) {
-	valueEncoder(v)(e, v, false)
+	valueEncoder(v, e.tag)(e, v, false)
 }
 
 type encoderFunc func(e *encodeState, v reflect.Value, quoted bool)
@@ -306,14 +307,14 @@ var encoderCache struct {
 	m map[reflect.Type]encoderFunc
 }
 
-func valueEncoder(v reflect.Value) encoderFunc {
+func valueEncoder(v reflect.Value, tag string) encoderFunc {
 	if !v.IsValid() {
 		return invalidValueEncoder
 	}
-	return typeEncoder(v.Type())
+	return typeEncoder(v.Type(), tag)
 }
 
-func typeEncoder(t reflect.Type) encoderFunc {
+func typeEncoder(t reflect.Type, tag string) encoderFunc {
 	encoderCache.RLock()
 	f := encoderCache.m[t]
 	encoderCache.RUnlock()
@@ -339,7 +340,7 @@ func typeEncoder(t reflect.Type) encoderFunc {
 
 	// Compute fields without lock.
 	// Might duplicate effort but won't hold other computations back.
-	f = newTypeEncoder(t, true)
+	f = newTypeEncoder(t, true, tag)
 	wg.Done()
 	encoderCache.Lock()
 	encoderCache.m[t] = f
@@ -354,13 +355,13 @@ var (
 
 // newTypeEncoder constructs an encoderFunc for a type.
 // The returned encoder only checks CanAddr when allowAddr is true.
-func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
+func newTypeEncoder(t reflect.Type, allowAddr bool, tag string) encoderFunc {
 	if t.Implements(marshalerType) {
 		return marshalerEncoder
 	}
 	if t.Kind() != reflect.Ptr && allowAddr {
 		if reflect.PtrTo(t).Implements(marshalerType) {
-			return newCondAddrEncoder(addrMarshalerEncoder, newTypeEncoder(t, false))
+			return newCondAddrEncoder(addrMarshalerEncoder, newTypeEncoder(t, false, tag))
 		}
 	}
 
@@ -369,7 +370,7 @@ func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
 	}
 	if t.Kind() != reflect.Ptr && allowAddr {
 		if reflect.PtrTo(t).Implements(textMarshalerType) {
-			return newCondAddrEncoder(addrTextMarshalerEncoder, newTypeEncoder(t, false))
+			return newCondAddrEncoder(addrTextMarshalerEncoder, newTypeEncoder(t, false, tag))
 		}
 	}
 
@@ -389,15 +390,15 @@ func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
 	case reflect.Interface:
 		return interfaceEncoder
 	case reflect.Struct:
-		return newStructEncoder(t)
+		return newStructEncoder(t, tag)
 	case reflect.Map:
-		return newMapEncoder(t)
+		return newMapEncoder(t, tag)
 	case reflect.Slice:
-		return newSliceEncoder(t)
+		return newSliceEncoder(t, tag)
 	case reflect.Array:
-		return newArrayEncoder(t)
+		return newArrayEncoder(t, tag)
 	case reflect.Ptr:
-		return newPtrEncoder(t)
+		return newPtrEncoder(t, tag)
 	default:
 		return unsupportedTypeEncoder
 	}
@@ -539,7 +540,7 @@ func stringEncoder(e *encodeState, v reflect.Value, quoted bool) {
 		return
 	}
 	if quoted {
-		sb, err := Marshal(v.String())
+		sb, err := Marshal(v.String(), e.tag)
 		if err != nil {
 			e.error(err)
 		}
@@ -586,14 +587,14 @@ func (se *structEncoder) encode(e *encodeState, v reflect.Value, quoted bool) {
 	e.WriteByte('}')
 }
 
-func newStructEncoder(t reflect.Type) encoderFunc {
-	fields := cachedTypeFields(t)
+func newStructEncoder(t reflect.Type, tag string) encoderFunc {
+	fields := cachedTypeFields(t, tag)
 	se := &structEncoder{
 		fields:    fields,
 		fieldEncs: make([]encoderFunc, len(fields)),
 	}
 	for i, f := range fields {
-		se.fieldEncs[i] = typeEncoder(typeByIndex(t, f.index))
+		se.fieldEncs[i] = typeEncoder(typeByIndex(t, f.index), tag)
 	}
 	return se.encode
 }
@@ -621,11 +622,11 @@ func (me *mapEncoder) encode(e *encodeState, v reflect.Value, _ bool) {
 	e.WriteByte('}')
 }
 
-func newMapEncoder(t reflect.Type) encoderFunc {
+func newMapEncoder(t reflect.Type, tag string) encoderFunc {
 	if t.Key().Kind() != reflect.String {
 		return unsupportedTypeEncoder
 	}
-	me := &mapEncoder{typeEncoder(t.Elem())}
+	me := &mapEncoder{typeEncoder(t.Elem(), tag)}
 	return me.encode
 }
 
@@ -664,12 +665,12 @@ func (se *sliceEncoder) encode(e *encodeState, v reflect.Value, _ bool) {
 	se.arrayEnc(e, v, false)
 }
 
-func newSliceEncoder(t reflect.Type) encoderFunc {
+func newSliceEncoder(t reflect.Type, tag string) encoderFunc {
 	// Byte slices get special treatment; arrays don't.
 	if t.Elem().Kind() == reflect.Uint8 {
 		return encodeByteSlice
 	}
-	enc := &sliceEncoder{newArrayEncoder(t)}
+	enc := &sliceEncoder{newArrayEncoder(t, tag)}
 	return enc.encode
 }
 
@@ -689,8 +690,8 @@ func (ae *arrayEncoder) encode(e *encodeState, v reflect.Value, _ bool) {
 	e.WriteByte(']')
 }
 
-func newArrayEncoder(t reflect.Type) encoderFunc {
-	enc := &arrayEncoder{typeEncoder(t.Elem())}
+func newArrayEncoder(t reflect.Type, tag string) encoderFunc {
+	enc := &arrayEncoder{typeEncoder(t.Elem(), tag)}
 	return enc.encode
 }
 
@@ -706,8 +707,8 @@ func (pe *ptrEncoder) encode(e *encodeState, v reflect.Value, quoted bool) {
 	pe.elemEnc(e, v.Elem(), quoted)
 }
 
-func newPtrEncoder(t reflect.Type) encoderFunc {
-	enc := &ptrEncoder{typeEncoder(t.Elem())}
+func newPtrEncoder(t reflect.Type, tag string) encoderFunc {
+	enc := &ptrEncoder{typeEncoder(t.Elem(), tag)}
 	return enc.encode
 }
 
@@ -996,7 +997,7 @@ func (x byIndex) Less(i, j int) bool {
 // typeFields returns a list of fields that JSON should recognize for the given type.
 // The algorithm is breadth-first search over the set of structs to include - the top struct
 // and then any reachable anonymous structs.
-func typeFields(t reflect.Type) []field {
+func typeFields(t reflect.Type, tag string) []field {
 	// Anonymous fields to explore at the current level and the next.
 	current := []field{}
 	next := []field{{typ: t}}
@@ -1027,7 +1028,7 @@ func typeFields(t reflect.Type) []field {
 				if sf.PkgPath != "" { // unexported
 					continue
 				}
-				tag := sf.Tag.Get("json")
+				tag := sf.Tag.Get(tag)
 				if tag == "-" {
 					continue
 				}
@@ -1158,7 +1159,7 @@ var fieldCache struct {
 }
 
 // cachedTypeFields is like typeFields but uses a cache to avoid repeated work.
-func cachedTypeFields(t reflect.Type) []field {
+func cachedTypeFields(t reflect.Type, tag string) []field {
 	fieldCache.RLock()
 	f := fieldCache.m[t]
 	fieldCache.RUnlock()
@@ -1168,7 +1169,7 @@ func cachedTypeFields(t reflect.Type) []field {
 
 	// Compute fields without lock.
 	// Might duplicate effort but won't hold other computations back.
-	f = typeFields(t)
+	f = typeFields(t, tag)
 	if f == nil {
 		f = []field{}
 	}
